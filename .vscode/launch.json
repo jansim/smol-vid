@@ -1,0 +1,44 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:smol-vid}",
+      "name": "Debug SmolVidApp",
+      "target": "SmolVidApp",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug SmolVidApp"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:smol-vid}",
+      "name": "Release SmolVidApp",
+      "target": "SmolVidApp",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release SmolVidApp"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:smol-vid}",
+      "name": "Debug smolvid",
+      "target": "smolvid",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug smolvid"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:smol-vid}",
+      "name": "Release smolvid",
+      "target": "smolvid",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release smolvid"
+    }
+  ]
+}

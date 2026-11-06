@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # Same-repo branches already run on push; only fork PRs need this event.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        id: toolchain
+        run: |
+          swift --version && xcodebuild -version
+          echo "id=$( (swift --version; xcodebuild -version) 2>&1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      # smol-vid uses an installed ffmpeg rather than bundling one, like its users' Macs.
+      - name: ffmpeg
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          ffmpeg -hide_banner -version | head -1
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: build-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift') }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift') }}-
+
+      # Debug builds incrementally; file hashing because checkout resets mtimes.
+      - name: Build
+        run: swift build --build-tests -Xswiftc -gnone -Xswiftc -enable-incremental-file-hashing
+
+      - name: Tests
+        run: swift test --skip-build
+
+      - name: CLI smoke test
+        run: |
+          scripts/make-test-video.sh "$RUNNER_TEMP/test-video.mov"
+          .build/debug/smolvid --help
+          .build/debug/smolvid -v -p lossless -x metadata -o "$RUNNER_TEMP/lossless" "$RUNNER_TEMP/test-video.mov"
+          .build/debug/smolvid -v -p maximum -x all -o "$RUNNER_TEMP/maximum" "$RUNNER_TEMP/test-video.mov"
+          .build/debug/smolvid -v --hardware -c hevc -o "$RUNNER_TEMP/hardware" "$RUNNER_TEMP/test-video.mov"

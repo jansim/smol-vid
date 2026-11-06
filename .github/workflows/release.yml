@@ -1,0 +1,51 @@
+name: Release
+
+# Push a tag such as v1.1 to publish a release. The Homebrew cask
+# (jansim/tools/smol-vid) installs the latest release's smol-vid.zip.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: ffmpeg
+        run: command -v ffmpeg >/dev/null || brew install ffmpeg
+
+      # Universal, so the cask and the downloads run on Intel Macs too.
+      # The tag, without its "v", becomes the app's version.
+      - name: Build
+        run: VERSION="${GITHUB_REF_NAME#v}" ARCHS="arm64 x86_64" scripts/build-app.sh
+
+      - name: Checks
+        run: |
+          lipo -archs build/smol-vid.app/Contents/MacOS/SmolVidApp
+          lipo -archs build/bin/smolvid
+          codesign --verify --strict build/smol-vid.app
+          scripts/make-test-video.sh "$RUNNER_TEMP/test-video.mov"
+          build/bin/smolvid --help
+          build/bin/smolvid -v -p maximum -x all -o "$RUNNER_TEMP/maximum" "$RUNNER_TEMP/test-video.mov"
+          build/bin/smolvid -v -p lossless -o "$RUNNER_TEMP/lossless" "$RUNNER_TEMP/test-video.mov"
+
+      # ditto, not zip, keeps the signature and extended attributes intact.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ditto -c -k --keepParent build/smol-vid.app smol-vid.zip
+          mkdir "$RUNNER_TEMP/smolvid-cli"
+          cp build/smol-vid.app/Contents/Resources/smolvid "$RUNNER_TEMP/smolvid-cli/"
+          tar -czf smolvid-cli.tar.gz -C "$RUNNER_TEMP" smolvid-cli
+          shasum -a 256 smol-vid.zip smolvid-cli.tar.gz | tee SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" smol-vid.zip smolvid-cli.tar.gz SHA256SUMS.txt --generate-notes
