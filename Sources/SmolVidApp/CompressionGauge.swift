@@ -77,7 +77,7 @@ struct CompressionGauge: View {
             .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
             .overlay {
                 if isFocused {
-                    Circle().strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 3)
+                    Circle().strokeBorder(Theme.violet.opacity(0.6), lineWidth: 3)
                 }
             }
     }
@@ -88,7 +88,7 @@ struct CompressionGauge: View {
     }
 
     private func progress(_ level: Double, custom: Bool) -> some View {
-        let colors: [Color] = custom ? [.gray, .secondary] : [.teal, .blue, .indigo]
+        let colors: [Color] = custom ? [.gray, .secondary] : Theme.purples
         return placeArc(arc(to: level)
             .stroke(
                 AngularGradient(colors: colors, center: .center, startAngle: .degrees(-20), endAngle: .degrees(290)),

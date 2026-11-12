@@ -199,10 +199,10 @@ struct BottomBar: View {
                 Button {
                     model.compress()
                 } label: {
-                    Text(compressTitle)
+                    Label(compressTitle, systemImage: "wand.and.stars")
                         .frame(minWidth: 90)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(CompressButtonStyle())
                 .disabled(!model.canCompress)
                 .keyboardShortcut(.defaultAction)
             }
