@@ -25,6 +25,8 @@ Homebrew (`brew install ffmpeg`). The Homebrew cask installs it for you.
 - **Keeps the original** when compression wouldn't make the file smaller.
 - **Any format ffmpeg reads**: MP4, MOV, MKV, WebM, AVI, ... Re-encoded videos are written as MP4
   (QuickTime movies stay `.mov`), with text subtitles, chapters and metadata kept unless removed.
+  Audio tracks ffmpeg can't read, such as the spatial audio recent iPhones record next to their
+  stereo track, are left out.
 - **Batches**: drop several files or folders onto the window or the Dock icon (folders are searched
   recursively) and they're listed with what compressing each one saved.
 - **Progress**: see how far compression is, with the time remaining once a run will take longer than

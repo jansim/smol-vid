@@ -62,6 +62,34 @@ public struct FFmpeg: Hashable, Sendable {
         return String(words[index + 1])
     }
 
+    /// The codecs this ffmpeg can decode, by name (as ffprobe reports them in `codec_name`), or nil when
+    /// they couldn't be listed. Read once per ffmpeg.
+    public func decodableCodecs() -> Set<String>? {
+        Self.decodableCache.value(for: ffmpeg) {
+            guard let result = try? Self.run(ffmpeg, ["-hide_banner", "-codecs"]), result.status == 0 else { return nil }
+            return Self.parseDecodableCodecs(String(decoding: result.stdout, as: UTF8.self))
+        }
+    }
+
+    /// The decodable codecs in `ffmpeg -codecs` output, whose lines look like
+    /// " DEAIL. aac   AAC (Advanced Audio Coding)", the first flag being D for codecs it can decode.
+    static func parseDecodableCodecs(_ text: String) -> Set<String> {
+        var codecs = Set<String>()
+        var pastHeader = false
+        for line in text.split(separator: "\n") {
+            let words = line.split(separator: " ", maxSplits: 2)
+            if words.first?.allSatisfy({ $0 == "-" }) == true {
+                pastHeader = true
+                continue
+            }
+            guard pastHeader, words.count >= 2, words[0].count == 6, words[0].first == "D" else { continue }
+            codecs.insert(String(words[1]))
+        }
+        return codecs
+    }
+
+    private static let decodableCache = Cache<URL, Set<String>?>()
+
     // MARK: Probing
 
     /// What's in a video file, read with ffprobe.
@@ -122,6 +150,20 @@ public struct FFmpeg: Hashable, Sendable {
 
     private final class ErrorCollector: @unchecked Sendable {
         var data = Data()
+    }
+
+    private final class Cache<Key: Hashable, Value>: @unchecked Sendable {
+        private var values: [Key: Value] = [:]
+        private let lock = NSLock()
+
+        func value(for key: Key, compute: () -> Value) -> Value {
+            lock.lock()
+            defer { lock.unlock() }
+            if let value = values[key] { return value }
+            let value = compute()
+            values[key] = value
+            return value
+        }
     }
 }
 

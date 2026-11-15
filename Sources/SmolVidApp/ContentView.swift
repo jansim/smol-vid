@@ -10,7 +10,7 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView {
             FileHistorySidebar()
-                .navigationSplitViewColumnWidth(min: 250, ideal: 270, max: 380)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 270, max: 380)
         } detail: {
             VStack(spacing: 0) {
                 if model.ffmpeg == nil && model.items.isEmpty {
@@ -27,7 +27,7 @@ struct ContentView: View {
             }
             // Reach under the toolbar, so its buttons float on the same background.
             .background(TranslucentBackground().ignoresSafeArea())
-            .navigationSplitViewColumnWidth(min: 320, ideal: 560)
+            .navigationSplitViewColumnWidth(min: 280, ideal: 560)
             .dropDestination(for: URL.self) { urls, _ in
                 // Nothing can be added during a run.
                 guard !model.isCompressing else { return false }
@@ -59,7 +59,7 @@ struct ContentView: View {
         }
         .inspector(isPresented: $showInspector) {
             ProfileInspector()
-                .inspectorColumnWidth(min: 290, ideal: 300, max: 360)
+                .inspectorColumnWidth(min: 240, ideal: 300, max: 360)
                 .toolbar {
                     Spacer()
                     Button { showInspector.toggle() } label: {
@@ -176,7 +176,7 @@ struct BottomBar: View {
             if model.isCompressing {
                 VStack(alignment: .leading, spacing: 3) {
                     ProgressView(value: model.runProgress)
-                        .frame(width: 220)
+                        .frame(minWidth: 80, maxWidth: 220)
                     Text(progressText)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)

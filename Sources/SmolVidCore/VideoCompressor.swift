@@ -96,7 +96,9 @@ public enum VideoCompressor {
         let workDir = try workDirectory(near: output)
         defer { try? fm.removeItem(at: workDir) }
         let tempURL = workDir.appendingPathComponent("out").appendingPathExtension(output.pathExtension)
-        let arguments = try self.arguments(input: input, output: tempURL, info: info, profile: profile)
+        let arguments = try self.arguments(
+            input: input, output: tempURL, info: info, profile: profile, decodableCodecs: ffmpeg.decodableCodecs()
+        )
         try run(ffmpeg, arguments, duration: info.duration, log: workDir.appendingPathComponent("ffmpeg.log"), progress: progress)
 
         let compressedSize = fileSize(tempURL)
@@ -148,11 +150,23 @@ public enum VideoCompressor {
         Int((30 + 55 * min(max(profile.quality, 0), 1)).rounded())
     }
 
-    /// ffmpeg's arguments for compressing `input` (described by `info`) to `output`.
-    public static func arguments(input: URL, output: URL, info: VideoInfo, profile: CompressionProfile) throws -> [String] {
+    /// The audio streams ffmpeg can work with. Others, such as the spatial audio (Apple's APAC) that
+    /// recent iPhones record next to a stereo AAC track, are left out: ffmpeg can neither decode them nor
+    /// write them to a file, and asking it to stops the whole compression.
+    static func usableAudio(_ info: VideoInfo, decodableCodecs: Set<String>?) -> [VideoInfo.Stream] {
+        guard let decodableCodecs else { return info.audio }
+        return info.audio.filter { decodableCodecs.contains($0.codec) }
+    }
+
+    /// ffmpeg's arguments for compressing `input` (described by `info`) to `output`. Audio streams whose
+    /// codec isn't in `decodableCodecs` are left out; nil keeps them all.
+    public static func arguments(
+        input: URL, output: URL, info: VideoInfo, profile: CompressionProfile, decodableCodecs: Set<String>? = nil
+    ) throws -> [String] {
         var a = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input.path]
         let ext = output.pathExtension.lowercased()
         let isMP4 = ["mp4", "m4v", "mov"].contains(ext)
+        let audio = usableAudio(info, decodableCodecs: decodableCodecs)
 
         if profile.reencodeVideo {
             guard let video = info.video else { throw CompressionError.noVideo }
@@ -160,7 +174,7 @@ public enum VideoCompressor {
             a += videoArguments(video: video, info: info, profile: profile)
 
             if !profile.removeAudio {
-                for (k, stream) in info.audio.enumerated() {
+                for (k, stream) in audio.enumerated() {
                     a += ["-map", "0:\(stream.index)"]
                     // The bitrate is per stereo pair: surround sound gets more.
                     let pairs = max(1, ((stream.channels ?? 2) + 1) / 2)
@@ -181,7 +195,11 @@ public enum VideoCompressor {
         } else {
             // Every stream, unchanged; data streams (timecodes, camera telemetry) often can't be copied.
             a += ["-map", "0", "-map", "-0:d"]
-            if profile.removeAudio { a += ["-map", "-0:a"] }
+            if profile.removeAudio {
+                a += ["-map", "-0:a"]
+            } else {
+                for stream in info.audio where !audio.contains(stream) { a += ["-map", "-0:\(stream.index)"] }
+            }
             if profile.removeSubtitles { a += ["-map", "-0:s"] }
             a += ["-c", "copy", "-ignore_unknown"]
         }

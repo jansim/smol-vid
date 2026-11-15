@@ -138,7 +138,9 @@ for file in files {
             for: file, pathExtension: VideoCompressor.outputExtension(for: file, profile: profile)
         )
         if verbose, let info = try? ffmpeg.probe(file),
-           let arguments = try? VideoCompressor.arguments(input: file, output: output, info: info, profile: profile) {
+           let arguments = try? VideoCompressor.arguments(
+               input: file, output: output, info: info, profile: profile, decodableCodecs: ffmpeg.decodableCodecs()
+           ) {
             print("  ffmpeg " + arguments.map { $0.contains(" ") || $0.contains("'") ? "\"\($0)\"" : $0 }.joined(separator: " "))
         }
         let result = try VideoCompressor.compress(

@@ -160,6 +160,48 @@ final class VideoCompressorTests: XCTestCase {
         XCTAssertNil(after.tags["comment"])
     }
 
+    /// Recent iPhones record spatial audio (Apple's APAC), which ffmpeg can't decode, next to a stereo AAC
+    /// track. Such tracks are left out instead of failing; here ALAC stands in for APAC.
+    func testLeavesOutAudioFFmpegCannotDecode() throws {
+        let input = dir.appendingPathComponent("iphone.mov")
+        let made = try FFmpeg.run(ffmpeg.ffmpeg, [
+            "-nostdin", "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=2",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+            "-map", "0", "-map", "1", "-map", "1",
+            "-c:v", "libx264", "-crf", "8", "-pix_fmt", "yuv420p", "-c:a:0", "alac", "-c:a:1", "aac", input.path,
+        ])
+        XCTAssertEqual(made.status, 0, String(decoding: made.stderr, as: UTF8.self))
+        let info = try ffmpeg.probe(input)
+        XCTAssertEqual(info.audio.map(\.codec), ["alac", "aac"])
+        var decodable = try XCTUnwrap(ffmpeg.decodableCodecs())
+        XCTAssertTrue(decodable.isSuperset(of: ["h264", "aac", "alac"]))
+        decodable.remove("alac")
+
+        for profile in [CompressionProfile.medium, .lossless] {
+            let output = dir.appendingPathComponent("out-\(profile.id).mov")
+            let arguments = try VideoCompressor.arguments(
+                input: input, output: output, info: info, profile: profile, decodableCodecs: decodable
+            )
+            let result = try FFmpeg.run(ffmpeg.ffmpeg, arguments)
+            XCTAssertEqual(result.status, 0, String(decoding: result.stderr, as: UTF8.self))
+            XCTAssertEqual(try ffmpeg.probe(output).audio.map(\.codec), ["aac"], profile.name)
+        }
+    }
+
+    func testParsesDecodableCodecs() {
+        let text = """
+        Codecs:
+         D..... = Decoding supported
+         .E.... = Encoding supported
+         -------
+         D.VI.S h264                 H.264 / AVC (decoders: h264 h264_videotoolbox)
+         DEAIL. aac                  AAC (Advanced Audio Coding)
+         ..A... apple_apac           Apple Positional Audio Codec
+        """
+        XCTAssertEqual(FFmpeg.parseDecodableCodecs(text), ["h264", "aac"])
+    }
+
     func testConvertsOtherContainersToMP4() throws {
         let input = try makeVideo(named: "clip.mkv", width: 640, height: 360)
         XCTAssertEqual(VideoCompressor.outputExtension(for: input, profile: .medium), "mp4")
