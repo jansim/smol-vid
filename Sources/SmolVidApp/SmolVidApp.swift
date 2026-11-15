@@ -11,7 +11,7 @@ struct SmolVidApp: App {
         Window("smol-vid", id: "main") {
             ContentView()
                 .environment(model)
-                .frame(minHeight: 330)
+                .frame(minHeight: 280)
         }
         .defaultSize(width: 1130, height: 640)
         .windowToolbarStyle(.unified(showsTitle: false))
