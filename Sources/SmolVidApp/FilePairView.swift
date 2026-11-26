@@ -11,6 +11,9 @@ struct FilePairView: View {
     @State private var quickLookURL: URL?
     /// The pair's unscaled size, to shrink it into a small window.
     @State private var pairSize = CGSize(width: FilePair.width, height: 240)
+    /// The height of the Compress controls below the pair, which the pair leaves room for.
+    @State private var controlsHeight: CGFloat = 80
+    private static let controlsSpacing: CGFloat = 28
     /// Bumped when the app becomes active, so files trashed or deleted meanwhile are shown as such.
     @State private var filesCheckedAt = Date.now
     @FocusState private var isFocused: Bool
@@ -18,11 +21,20 @@ struct FilePairView: View {
     var body: some View {
         GeometryReader { proxy in
             if let item = model.current {
-                FilePair(item: item, selectedFile: selectedFile, selectFile: selectFile, preview: preview)
-                    .onGeometryChange(for: CGSize.self) { $0.size } action: { pairSize = $0 }
-                    // Shrink the pair in a small window rather than letting it set the window's minimum size.
-                    .scaleEffect(scale(fitting: proxy.size))
-                    .frame(width: proxy.size.width, height: proxy.size.height)
+                let scale = scale(fitting: CGSize(
+                    width: proxy.size.width,
+                    height: max(0, proxy.size.height - controlsHeight - Self.controlsSpacing)
+                ))
+                VStack(spacing: Self.controlsSpacing) {
+                    FilePair(item: item, selectedFile: selectedFile, selectFile: selectFile, preview: preview)
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { pairSize = $0 }
+                        // Shrink the pair in a small window rather than letting it set the window's minimum size.
+                        .scaleEffect(scale)
+                        .frame(width: pairSize.width * scale, height: pairSize.height * scale)
+                    CompressControls()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
         }
         .padding(24)
