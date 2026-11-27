@@ -19,10 +19,10 @@ struct ContentView: View {
                     DropZoneView(isTargeted: isDropTargeted)
                 } else if model.isBatch {
                     BatchView()
-                        .safeAreaInset(edge: .bottom, spacing: 0) { BottomBar() }
+                    CompressControls()
+                        .padding(.vertical, 20)
                 } else {
                     FilePairView()
-                        .safeAreaInset(edge: .bottom, spacing: 0) { BottomBar() }
                 }
             }
             // Reach under the toolbar, so its buttons float on the same background.
@@ -159,40 +159,19 @@ struct FFmpegMissingView: View {
     }
 }
 
-// MARK: - Bottom bar
+// MARK: - Compress controls
 
-struct BottomBar: View {
+/// The Compress button with the profile picker centered below it, shown under the video.
+struct CompressControls: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        HStack(spacing: 12) {
-            if model.ffmpeg == nil {
-                Label("ffmpeg is not installed: brew install ffmpeg", systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            if model.isCompressing {
-                VStack(alignment: .leading, spacing: 3) {
-                    ProgressView(value: model.runProgress)
-                        .frame(minWidth: 80, maxWidth: 220)
-                    Text(progressText)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-            }
-            Spacer()
-            Picker("Profile", selection: $model.selectedProfileID) {
-                ForEach(CompressionProfile.builtIns) { Text(model.displayName(of: $0)).tag($0.id) }
-            }
-            .labelsHidden()
-            .fixedSize()
-            .disabled(model.isCompressing)
+        VStack(spacing: 12) {
             if model.isCompressing {
                 Button(model.isCancelling ? "Cancelling…" : "Cancel") { model.cancel() }
-                    .frame(minWidth: 90)
+                    .controlSize(.extraLarge)
+                    .frame(minWidth: 140)
                     .disabled(model.isCancelling)
                     .keyboardShortcut(.cancelAction)
             } else {
@@ -200,17 +179,36 @@ struct BottomBar: View {
                     model.compress()
                 } label: {
                     Label(compressTitle, systemImage: "wand.and.stars")
-                        .frame(minWidth: 90)
+                        .frame(minWidth: 140)
                 }
-                .buttonStyle(CompressButtonStyle())
+                .buttonStyle(CompressButtonStyle(size: .large))
                 .disabled(!model.canCompress)
                 .keyboardShortcut(.defaultAction)
             }
+            Picker("Profile", selection: $model.selectedProfileID) {
+                ForEach(CompressionProfile.builtIns) { Text(model.displayName(of: $0)).tag($0.id) }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .disabled(model.isCompressing)
+            if model.isCompressing {
+                VStack(spacing: 3) {
+                    ProgressView(value: model.runProgress)
+                        .frame(width: 220)
+                    Text(progressText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if model.ffmpeg == nil {
+                Label("ffmpeg is not installed: brew install ffmpeg", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
+        .frame(maxWidth: .infinity)
     }
 
     private var compressTitle: String {

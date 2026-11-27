@@ -12,12 +12,17 @@ enum Theme {
 /// A prominent, purple capsule button with a soft glow, a shimmer that sweeps across it now and then,
 /// and a little lift on hover.
 struct CompressButtonStyle: ButtonStyle {
+    enum Size { case regular, large }
+
+    var size: Size = .regular
+
     func makeBody(configuration: Configuration) -> some View {
-        CompressButton(configuration: configuration)
+        CompressButton(configuration: configuration, size: size)
     }
 
     private struct CompressButton: View {
         let configuration: ButtonStyleConfiguration
+        let size: Size
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var isHovering = false
@@ -26,10 +31,10 @@ struct CompressButtonStyle: ButtonStyle {
         var body: some View {
             let pressed = configuration.isPressed
             configuration.label
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: size == .large ? 17 : 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(isEnabled ? 1 : 0.7))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
+                .padding(.horizontal, size == .large ? 28 : 16)
+                .padding(.vertical, size == .large ? 12 : 6)
                 .background {
                     Capsule()
                         .fill(LinearGradient(
