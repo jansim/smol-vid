@@ -44,8 +44,20 @@ struct CompressionGauge: View {
             .gesture(drag)
             .animation(.spring(response: 0.3, dampingFraction: 0.62), value: level)
             .animation(.easeInOut(duration: 0.35), value: onFire)
+            // During a run, the dial flips over to show the run's progress on its back.
+            .modifier(FlipEffect(
+                angle: model.isCompressing ? 180 : 0,
+                rotates: !reduceMotion,
+                back: backFace(profile)
+            ))
+            .animation(
+                reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.7, dampingFraction: 0.72),
+                value: model.isCompressing
+            )
             endLabels
                 .padding(.top, -12)
+                .opacity(model.isCompressing ? 0.4 : 1)
+                .animation(.easeInOut(duration: 0.3), value: model.isCompressing)
         }
         // Like NSSlider, only take key focus with Full Keyboard Access, so the dial isn't focused at launch.
         .focusable(interactions: .activate)
@@ -53,11 +65,12 @@ struct CompressionGauge: View {
         .focusEffectDisabled()
         .onKeyPress(keys: [.leftArrow, .downArrow]) { _ in step(-1) }
         .onKeyPress(keys: [.rightArrow, .upArrow]) { _ in step(1) }
-        .opacity(model.isCompressing ? 0.5 : 1)
         .allowsHitTesting(!model.isCompressing)
         .accessibilityElement()
         .accessibilityLabel("Compression level")
-        .accessibilityValue(profile.name)
+        .accessibilityValue(model.isCompressing
+            ? "\(profile.name), compressing, \(Format.percent(model.runProgress))"
+            : profile.name)
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: _ = step(1)
@@ -188,6 +201,76 @@ struct CompressionGauge: View {
         .frame(width: diameter + 60)
     }
 
+    // MARK: Back
+
+    /// The dial's back, shown during a run: the run's progress fills the track with the knob riding
+    /// its tip, while rings squeeze in toward the middle behind the percentage and the profile's name.
+    private func backFace(_ profile: CompressionProfile) -> some View {
+        let fraction = min(max(model.runProgress, 0), 1)
+        return ZStack {
+            face
+            TimelineView(.animation(paused: reduceMotion || !model.isCompressing)) { timeline in
+                squeezingRings(at: timeline.date.timeIntervalSinceReferenceDate)
+            }
+            track
+            progress(fraction, custom: false)
+            TimelineView(.animation(paused: reduceMotion || !model.isCompressing)) { timeline in
+                glint(fraction, at: timeline.date.timeIntervalSinceReferenceDate)
+            }
+            knob(fraction)
+            VStack(spacing: 1) {
+                Text(model.isCancelling ? "CANCELLING" : "COMPRESSING")
+                    .font(.system(size: 8, weight: .semibold, design: .rounded))
+                    .tracking(1.2)
+                    .foregroundStyle(.secondary)
+                Text(Format.percent(fraction))
+                    .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
+                    .contentTransition(.numericText(value: fraction))
+                    .lineLimit(1)
+                Text(profile.name)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: [Theme.violet, Theme.grape], startPoint: .top, endPoint: .bottom))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: radius * 1.25)
+        }
+        .frame(width: diameter, height: diameter)
+        .animation(.easeOut(duration: 0.4), value: fraction)
+    }
+
+    /// Faint purple rings that shrink toward the center and fade, one after another, like something being squeezed.
+    private func squeezingRings(at time: TimeInterval) -> some View {
+        let count = 3
+        return ZStack {
+            ForEach(0..<count, id: \.self) { index in
+                let phase = (time / 2.4 + Double(index) / Double(count)).truncatingRemainder(dividingBy: 1)
+                Circle()
+                    .stroke(Theme.violet, lineWidth: 1.5)
+                    .frame(width: radius * 1.6, height: radius * 1.6)
+                    .scaleEffect(1 - 0.6 * phase)
+                    .opacity(sin(phase * .pi) * 0.3)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// A short highlight that runs along the filled part of the track, like light catching on it.
+    private func glint(_ fraction: Double, at time: TimeInterval) -> some View {
+        let phase = (time / 1.8).truncatingRemainder(dividingBy: 1)
+        let end = sweep / 360 * fraction * phase
+        let length = min(end, 0.06)
+        return placeArc(Circle()
+            .trim(from: end - length, to: end)
+            .stroke(
+                LinearGradient(colors: [.white.opacity(0), .white.opacity(0.7)], startPoint: .leading, endPoint: .trailing),
+                style: StrokeStyle(lineWidth: trackWidth - 4, lineCap: .round)
+            ))
+            .opacity(fraction > 0.02 ? sin(phase * .pi) : 0)
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+    }
+
     // MARK: Geometry
 
     /// A circle trimmed to `level` of the dial's sweep, starting at 3 o'clock.
@@ -251,6 +334,35 @@ struct CompressionGauge: View {
         guard profile.id != model.selectedProfileID else { return }
         model.selectedProfileID = profile.id
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+}
+
+/// Turns a view over around its vertical axis to show `back`, swapping sides once it's edge-on.
+/// Without `rotates`, the sides simply swap.
+private struct FlipEffect<Back: View>: ViewModifier, Animatable {
+    var angle: Double
+    var rotates: Bool
+    var back: Back
+
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let showsBack = angle > 90
+        // Dip back a little while edge-on, as if lifted off and turned over.
+        let lift = rotates ? 1 - 0.08 * sin(angle * .pi / 180) : 1
+        ZStack {
+            content
+                .opacity(showsBack ? 0 : 1)
+            back
+                .rotation3DEffect(.degrees(rotates ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+                .opacity(showsBack ? 1 : 0)
+                .allowsHitTesting(showsBack)
+        }
+        .rotation3DEffect(.degrees(rotates ? angle : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+        .scaleEffect(lift)
     }
 }
 
